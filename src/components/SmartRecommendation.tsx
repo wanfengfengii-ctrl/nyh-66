@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useYarnStore } from '@/store/useStore';
 import { TWIST_LEVEL_COLORS, TWIST_LEVEL_LABELS } from '@/utils/constants';
-import type { RecommendTarget } from '@/types';
 import { Lightbulb, Target, Shield, ArrowRight } from 'lucide-react';
 
 export default function SmartRecommendation() {
@@ -20,7 +19,7 @@ export default function SmartRecommendation() {
   } = useYarnStore();
 
   const recommendations = useMemo(() => getRecommendations(), [
-    params, recommendTarget, targetTwist, targetBreakRisk, targetUniformity,
+    params, recommendTarget, targetTwist, targetBreakRisk, targetUniformity, getRecommendations,
   ]);
 
   return (

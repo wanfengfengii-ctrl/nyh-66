@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { YarnParams, Experiment, Recommendation, RecommendTarget } from '@/types';
-import { DEFAULT_PARAMS, STORAGE_KEY, PARAM_RANGES, TWIST_THRESHOLDS, TWIST_LEVEL_LABELS } from '@/utils/constants';
+import type { YarnParams, Experiment, Recommendation, RecommendTarget, Keyframe, PlaybackRecord, PlaybackState } from '@/types';
+import { DEFAULT_PARAMS, STORAGE_KEY, PLAYBACK_STORAGE_KEY, TWIST_THRESHOLDS, TWIST_LEVEL_LABELS, KEYFRAME_THROTTLE_MS } from '@/utils/constants';
 import { calculateYarnMetrics, generateId, recommendByTargetTwist, recommendByStability } from '@/utils/calculations';
 
 interface YarnStore {
@@ -11,6 +11,7 @@ interface YarnStore {
   targetTwist: number;
   targetBreakRisk: number;
   targetUniformity: number;
+  playback: PlaybackState;
   setParams: (params: Partial<YarnParams>) => void;
   resetParams: () => void;
   saveExperiment: (name: string) => boolean;
@@ -25,6 +26,25 @@ interface YarnStore {
   getRecommendations: () => Recommendation[];
   applyRecommendation: (rec: Recommendation) => void;
   exportReport: () => string;
+  startRecording: () => void;
+  stopRecording: () => void;
+  recordKeyframe: (isKeyChange?: boolean) => void;
+  clearKeyframes: () => void;
+  startPlayback: () => void;
+  pausePlayback: () => void;
+  stopPlayback: () => void;
+  seekTo: (time: number) => void;
+  setPlaybackSpeed: (speed: number) => void;
+  stepForward: () => void;
+  stepBackward: () => void;
+  goToKeyframe: (index: number) => void;
+  savePlaybackRecord: (name: string) => boolean;
+  deletePlaybackRecord: (id: string) => void;
+  loadPlaybackRecord: (record: PlaybackRecord) => void;
+  unloadPlaybackRecord: () => void;
+  loadPlaybackRecords: () => void;
+  getPlaybackParams: () => YarnParams | null;
+  getPlaybackMetrics: () => ReturnType<typeof calculateYarnMetrics> | null;
 }
 
 function loadFromStorage(): Experiment[] {
@@ -45,6 +65,74 @@ function saveToStorage(experiments: Experiment[]) {
   }
 }
 
+function loadPlaybackFromStorage(): PlaybackRecord[] {
+  try {
+    const data = localStorage.getItem(PLAYBACK_STORAGE_KEY);
+    if (data) return JSON.parse(data);
+  } catch {
+    console.error('Failed to load playback records from storage');
+  }
+  return [];
+}
+
+function savePlaybackToStorage(records: PlaybackRecord[]) {
+  try {
+    localStorage.setItem(PLAYBACK_STORAGE_KEY, JSON.stringify(records));
+  } catch {
+    console.error('Failed to save playback records to storage');
+  }
+}
+
+function createInitialPlaybackState(): PlaybackState {
+  return {
+    isRecording: false,
+    isPlaying: false,
+    isPaused: false,
+    currentTime: 0,
+    duration: 0,
+    playbackSpeed: 1,
+    keyframes: [],
+    currentKeyframeIdx: -1,
+    savedRecords: [],
+    loadedRecord: null,
+  };
+}
+
+let lastRecordTime = 0;
+let recordingStartTime = 0;
+
+function findKeyframeAtTime(keyframes: Keyframe[], time: number): { idx: number; keyframe: Keyframe | null } {
+  if (keyframes.length === 0) return { idx: -1, keyframe: null };
+  if (time <= keyframes[0].timestamp) return { idx: 0, keyframe: keyframes[0] };
+  if (time >= keyframes[keyframes.length - 1].timestamp) return { idx: keyframes.length - 1, keyframe: keyframes[keyframes.length - 1] };
+
+  for (let i = 1; i < keyframes.length; i++) {
+    if (time < keyframes[i].timestamp) {
+      const prev = keyframes[i - 1];
+      const next = keyframes[i];
+      const ratio = (time - prev.timestamp) / (next.timestamp - prev.timestamp);
+      const interpolated: Keyframe = {
+        id: prev.id,
+        timestamp: time,
+        params: {
+          spindleSpeed: prev.params.spindleSpeed + (next.params.spindleSpeed - prev.params.spindleSpeed) * ratio,
+          draftSpeed: prev.params.draftSpeed + (next.params.draftSpeed - prev.params.draftSpeed) * ratio,
+          fiberLength: prev.params.fiberLength + (next.params.fiberLength - prev.params.fiberLength) * ratio,
+        },
+        metrics: {
+          twist: prev.metrics.twist + (next.metrics.twist - prev.metrics.twist) * ratio,
+          twistLevel: next.metrics.twistLevel,
+          breakRisk: Math.round(prev.metrics.breakRisk + (next.metrics.breakRisk - prev.metrics.breakRisk) * ratio),
+          uniformity: Math.round(prev.metrics.uniformity + (next.metrics.uniformity - prev.metrics.uniformity) * ratio),
+          isFeasible: next.metrics.isFeasible,
+        },
+      };
+      return { idx: i - 1, keyframe: interpolated };
+    }
+  }
+  return { idx: keyframes.length - 1, keyframe: keyframes[keyframes.length - 1] };
+}
+
 export const useYarnStore = create<YarnStore>((set, get) => ({
   params: DEFAULT_PARAMS,
   experiments: [],
@@ -53,11 +141,16 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
   targetTwist: 500,
   targetBreakRisk: 50,
   targetUniformity: 70,
+  playback: createInitialPlaybackState(),
 
   setParams: (newParams) => {
+    const { playback } = get();
     set((state) => ({
       params: { ...state.params, ...newParams },
     }));
+    if (playback.isRecording) {
+      get().recordKeyframe(true);
+    }
   },
 
   resetParams: () => {
@@ -192,5 +285,295 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
     lines.push('═══════════════════════════════════════');
 
     return lines.join('\n');
+  },
+
+  startRecording: () => {
+    const { params, playback } = get();
+    if (playback.isRecording) return;
+    const metrics = calculateYarnMetrics(params);
+    const now = Date.now();
+    recordingStartTime = now;
+    lastRecordTime = now;
+    const firstKeyframe: Keyframe = {
+      id: generateId(),
+      timestamp: 0,
+      params: { ...params },
+      metrics,
+      isKeyChange: true,
+    };
+    set({
+      playback: {
+        ...playback,
+        isRecording: true,
+        isPlaying: false,
+        isPaused: false,
+        currentTime: 0,
+        duration: 0,
+        keyframes: [firstKeyframe],
+        currentKeyframeIdx: 0,
+        loadedRecord: null,
+      },
+    });
+  },
+
+  stopRecording: () => {
+    const { playback } = get();
+    if (!playback.isRecording) return;
+    const duration = playback.keyframes.length > 0
+      ? playback.keyframes[playback.keyframes.length - 1].timestamp
+      : 0;
+    set({
+      playback: {
+        ...playback,
+        isRecording: false,
+        duration,
+        currentTime: 0,
+        currentKeyframeIdx: 0,
+      },
+    });
+  },
+
+  recordKeyframe: (isKeyChange = false) => {
+    const { params, playback } = get();
+    if (!playback.isRecording) return;
+
+    const now = Date.now();
+    if (now - lastRecordTime < KEYFRAME_THROTTLE_MS && !isKeyChange) return;
+
+    const lastKf = playback.keyframes[playback.keyframes.length - 1];
+    const hasChanged = !lastKf ||
+      lastKf.params.spindleSpeed !== params.spindleSpeed ||
+      lastKf.params.draftSpeed !== params.draftSpeed ||
+      lastKf.params.fiberLength !== params.fiberLength;
+
+    if (!hasChanged && !isKeyChange) return;
+
+    lastRecordTime = now;
+    const metrics = calculateYarnMetrics(params);
+    const timestamp = now - recordingStartTime;
+
+    const newKeyframe: Keyframe = {
+      id: generateId(),
+      timestamp,
+      params: { ...params },
+      metrics,
+      isKeyChange,
+    };
+
+    const newKeyframes = [...playback.keyframes, newKeyframe];
+    set({
+      playback: {
+        ...playback,
+        keyframes: newKeyframes,
+        duration: timestamp,
+        currentKeyframeIdx: newKeyframes.length - 1,
+      },
+    });
+  },
+
+  clearKeyframes: () => {
+    const { playback } = get();
+    set({
+      playback: {
+        ...playback,
+        keyframes: [],
+        currentTime: 0,
+        duration: 0,
+        currentKeyframeIdx: -1,
+        isPlaying: false,
+        isPaused: false,
+        loadedRecord: null,
+      },
+    });
+  },
+
+  startPlayback: () => {
+    const { playback } = get();
+    if (playback.keyframes.length === 0) return;
+    set({
+      playback: {
+        ...playback,
+        isPlaying: true,
+        isPaused: false,
+        currentTime: playback.currentTime >= playback.duration ? 0 : playback.currentTime,
+      },
+    });
+  },
+
+  pausePlayback: () => {
+    const { playback } = get();
+    set({
+      playback: {
+        ...playback,
+        isPlaying: false,
+        isPaused: true,
+      },
+    });
+  },
+
+  stopPlayback: () => {
+    const { playback } = get();
+    set({
+      playback: {
+        ...playback,
+        isPlaying: false,
+        isPaused: false,
+        currentTime: 0,
+        currentKeyframeIdx: 0,
+      },
+    });
+  },
+
+  seekTo: (time: number) => {
+    const { playback } = get();
+    const clampedTime = Math.max(0, Math.min(playback.duration, time));
+    const { idx } = findKeyframeAtTime(playback.keyframes, clampedTime);
+    set({
+      playback: {
+        ...playback,
+        currentTime: clampedTime,
+        currentKeyframeIdx: idx,
+      },
+    });
+  },
+
+  setPlaybackSpeed: (speed: number) => {
+    const { playback } = get();
+    set({
+      playback: {
+        ...playback,
+        playbackSpeed: speed,
+      },
+    });
+  },
+
+  stepForward: () => {
+    const { playback } = get();
+    const nextIdx = Math.min(playback.keyframes.length - 1, playback.currentKeyframeIdx + 1);
+    if (nextIdx >= 0 && nextIdx < playback.keyframes.length) {
+      const kf = playback.keyframes[nextIdx];
+      set({
+        playback: {
+          ...playback,
+          currentTime: kf.timestamp,
+          currentKeyframeIdx: nextIdx,
+        },
+      });
+    }
+  },
+
+  stepBackward: () => {
+    const { playback } = get();
+    const prevIdx = Math.max(0, playback.currentKeyframeIdx - 1);
+    if (prevIdx >= 0 && prevIdx < playback.keyframes.length) {
+      const kf = playback.keyframes[prevIdx];
+      set({
+        playback: {
+          ...playback,
+          currentTime: kf.timestamp,
+          currentKeyframeIdx: prevIdx,
+        },
+      });
+    }
+  },
+
+  goToKeyframe: (index: number) => {
+    const { playback } = get();
+    if (index >= 0 && index < playback.keyframes.length) {
+      const kf = playback.keyframes[index];
+      set({
+        playback: {
+          ...playback,
+          currentTime: kf.timestamp,
+          currentKeyframeIdx: index,
+        },
+      });
+    }
+  },
+
+  savePlaybackRecord: (name: string) => {
+    const { playback } = get();
+    if (playback.keyframes.length < 2) return false;
+
+    const record: PlaybackRecord = {
+      id: generateId(),
+      name: name.trim() || `回放 ${playback.savedRecords.length + 1}`,
+      keyframes: playback.keyframes,
+      duration: playback.duration,
+      createdAt: Date.now(),
+    };
+
+    const savedRecords = [...playback.savedRecords, record];
+    set({
+      playback: {
+        ...playback,
+        savedRecords,
+      },
+    });
+    savePlaybackToStorage(savedRecords);
+    return true;
+  },
+
+  deletePlaybackRecord: (id: string) => {
+    const { playback } = get();
+    const savedRecords = playback.savedRecords.filter((r) => r.id !== id);
+    const loadedRecord = playback.loadedRecord?.id === id ? null : playback.loadedRecord;
+    set({
+      playback: {
+        ...playback,
+        savedRecords,
+        loadedRecord,
+      },
+    });
+    savePlaybackToStorage(savedRecords);
+  },
+
+  loadPlaybackRecord: (record: PlaybackRecord) => {
+    set((state) => ({
+      playback: {
+        ...state.playback,
+        keyframes: record.keyframes,
+        duration: record.duration,
+        currentTime: 0,
+        currentKeyframeIdx: 0,
+        isPlaying: false,
+        isPaused: false,
+        isRecording: false,
+        loadedRecord: record,
+      },
+    }));
+  },
+
+  unloadPlaybackRecord: () => {
+    set((state) => ({
+      playback: {
+        ...state.playback,
+        loadedRecord: null,
+      },
+    }));
+  },
+
+  loadPlaybackRecords: () => {
+    const savedRecords = loadPlaybackFromStorage();
+    set((state) => ({
+      playback: {
+        ...state.playback,
+        savedRecords,
+      },
+    }));
+  },
+
+  getPlaybackParams: () => {
+    const { playback } = get();
+    if (playback.keyframes.length === 0) return null;
+    const { keyframe } = findKeyframeAtTime(playback.keyframes, playback.currentTime);
+    return keyframe ? keyframe.params : null;
+  },
+
+  getPlaybackMetrics: () => {
+    const { playback } = get();
+    if (playback.keyframes.length === 0) return null;
+    const { keyframe } = findKeyframeAtTime(playback.keyframes, playback.currentTime);
+    return keyframe ? keyframe.metrics : null;
   },
 }));

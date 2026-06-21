@@ -17,7 +17,6 @@ import {
   PolarRadiusAxis,
   Radar,
   Cell,
-  ReferenceLine,
 } from 'recharts';
 import { BarChart3, Radar as RadarIcon } from 'lucide-react';
 import { useState } from 'react';

@@ -4,7 +4,7 @@ import { Download, FileText, CheckCircle } from 'lucide-react';
 import { useState } from 'react';
 
 export default function ExportPanel() {
-  const { params, experiments, selectedIds, exportReport } = useYarnStore();
+  const { experiments, selectedIds, exportReport } = useYarnStore();
   const [copied, setCopied] = useState(false);
 
   const handleExportTxt = () => {

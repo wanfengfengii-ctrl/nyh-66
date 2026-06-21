@@ -4,8 +4,13 @@ import { calculateYarnMetrics } from '@/utils/calculations';
 import { TWIST_THRESHOLDS, TWIST_LEVEL_LABELS } from '@/utils/constants';
 
 export default function YarnAnimation() {
-  const { params } = useYarnStore();
-  const metrics = useMemo(() => calculateYarnMetrics(params), [params]);
+  const { params, playback, getPlaybackParams, getPlaybackMetrics } = useYarnStore();
+  const baseMetrics = useMemo(() => calculateYarnMetrics(params), [params]);
+  const isPlaybackMode = playback.isPlaying || playback.isPaused;
+  const playbackParams = isPlaybackMode ? getPlaybackParams() : null;
+  const playbackMetrics = isPlaybackMode ? getPlaybackMetrics() : null;
+  const displayParams = playbackParams || params;
+  const displayMetrics = playbackMetrics || baseMetrics;
   const [rotation, setRotation] = useState(0);
   const animationRef = useRef<number>();
   const lastTimeRef = useRef<number>(0);
@@ -16,7 +21,7 @@ export default function YarnAnimation() {
       const delta = time - lastTimeRef.current;
       lastTimeRef.current = time;
 
-      const speedFactor = params.spindleSpeed / 60;
+      const speedFactor = displayParams.spindleSpeed / 60;
       setRotation((prev) => prev + delta * 0.1 * speedFactor);
 
       animationRef.current = requestAnimationFrame(animate);
@@ -29,11 +34,11 @@ export default function YarnAnimation() {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [params.spindleSpeed]);
+  }, [displayParams.spindleSpeed]);
 
   const yarnSegments = useMemo(() => {
     const segments = [];
-    const twistDensity = metrics.twist / 50;
+    const twistDensity = displayMetrics.twist / 50;
     const totalSegments = 30;
 
     for (let i = 0; i < totalSegments; i++) {
@@ -43,17 +48,17 @@ export default function YarnAnimation() {
       segments.push({ t, amplitude, phase });
     }
     return segments;
-  }, [metrics.twist]);
+  }, [displayMetrics.twist]);
 
-  const yarnColor = metrics.breakRisk >= 70
+  const yarnColor = displayMetrics.breakRisk >= 70
     ? '#ef4444'
-    : metrics.twistLevel === 'high'
+    : displayMetrics.twistLevel === 'high'
     ? '#f59e0b'
-    : metrics.twistLevel === 'optimal'
+    : displayMetrics.twistLevel === 'optimal'
     ? '#10b981'
     : '#0ea5e9';
 
-  const twistNorm = Math.min(1, metrics.twist / TWIST_THRESHOLDS.optimalMax);
+  const twistNorm = Math.min(1, displayMetrics.twist / TWIST_THRESHOLDS.optimalMax);
 
   return (
     <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 border border-slate-700/50 shadow-xl overflow-hidden relative">
@@ -62,6 +67,16 @@ export default function YarnAnimation() {
       <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2 relative z-10">
         <span className="w-2 h-6 bg-amber-500 rounded-full"></span>
         纺纱模拟
+        {isPlaybackMode && (
+          <span className="ml-auto px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full animate-pulse">
+            回放模式
+          </span>
+        )}
+        {playback.isRecording && (
+          <span className="ml-auto px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full animate-pulse">
+            录制中
+          </span>
+        )}
       </h2>
 
       <div className="relative bg-slate-950/50 rounded-xl border border-slate-700/30 overflow-hidden">
@@ -109,7 +124,7 @@ export default function YarnAnimation() {
 
           <g transform="translate(160, 140)">
             <path
-              d={`M 0,0 ${yarnSegments.map((s, i) => {
+              d={`M 0,0 ${yarnSegments.map((s) => {
                 const x = s.t * 200;
                 const y = Math.sin(s.phase + rotation * 0.05) * s.amplitude;
                 return `L ${x},${y}`;
@@ -167,19 +182,19 @@ export default function YarnAnimation() {
 
           <g transform="translate(260, 60)">
             <text textAnchor="middle" fill={yarnColor} fontSize="12" fontWeight="bold">
-              {metrics.twist.toFixed(1)} 捻/m
+              {displayMetrics.twist.toFixed(1)} 捻/m
             </text>
             <text y="16" textAnchor="middle" fill="#64748b" fontSize="10">
-              {TWIST_LEVEL_LABELS[metrics.twistLevel]}
+              {TWIST_LEVEL_LABELS[displayMetrics.twistLevel]}
             </text>
           </g>
         </svg>
       </div>
 
       <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
-        <span>转速: {params.spindleSpeed} rpm</span>
-        <span>牵伸: {params.draftSpeed} m/min</span>
-        <span>纤维: {params.fiberLength} mm</span>
+        <span>转速: {displayParams.spindleSpeed.toFixed(0)} rpm</span>
+        <span>牵伸: {displayParams.draftSpeed.toFixed(1)} m/min</span>
+        <span>纤维: {displayParams.fiberLength.toFixed(0)} mm</span>
       </div>
     </div>
   );

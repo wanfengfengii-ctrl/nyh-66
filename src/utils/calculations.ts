@@ -177,7 +177,6 @@ export function recommendByStability(
   const results: Recommendation[] = [];
   const { fiberLength } = currentParams;
   const speedRange = PARAM_RANGES.spindleSpeed;
-  const draftRange = PARAM_RANGES.draftSpeed;
 
   const optimalTwist = (TWIST_THRESHOLDS.lowMax + TWIST_THRESHOLDS.optimalMax) / 2;
   const baseDraft = currentParams.draftSpeed;
@@ -232,7 +231,6 @@ export function calculateStableIntervals(currentParams: YarnParams): StableInter
     const points: StableIntervalPoint[] = [];
     const step = range.step;
     const numSteps = 60;
-    const halfRange = ((range.max - range.min) / 2);
 
     let lowBound = range.max;
     let highBound = range.min;

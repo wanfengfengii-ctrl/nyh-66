@@ -9,15 +9,19 @@ import SmartRecommendation from '@/components/SmartRecommendation';
 import StableIntervalChart from '@/components/StableIntervalChart';
 import TrendChart from '@/components/TrendChart';
 import ExportPanel from '@/components/ExportPanel';
+import ProcessPlayback from '@/components/ProcessPlayback';
+import PlaybackRecordList from '@/components/PlaybackRecordList';
 import { useYarnStore } from '@/store/useStore';
 import { Layers } from 'lucide-react';
 
 export default function Home() {
   const loadExperiments = useYarnStore((state) => state.loadExperiments);
+  const loadPlaybackRecords = useYarnStore((state) => state.loadPlaybackRecords);
 
   useEffect(() => {
     loadExperiments();
-  }, [loadExperiments]);
+    loadPlaybackRecords();
+  }, [loadExperiments, loadPlaybackRecords]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -53,6 +57,7 @@ export default function Home() {
           <div className="lg:col-span-6 space-y-6">
             <YarnAnimation />
             <MetricCards />
+            <ProcessPlayback />
             <CompareChart />
             <StableIntervalChart />
             <TrendChart />
@@ -60,12 +65,13 @@ export default function Home() {
 
           <div className="lg:col-span-3 space-y-6">
             <ExperimentList />
+            <PlaybackRecordList />
             <ExportPanel />
           </div>
         </div>
 
         <footer className="mt-10 text-center text-slate-500 text-xs">
-          <p>调整参数观察纱线变化 · 智能推荐优化工艺 · 保存方案进行对比分析 · 导出实验报告</p>
+          <p>调整参数观察纱线变化 · 工艺回放完整记录实验过程 · 智能推荐优化工艺 · 保存方案进行对比分析 · 导出实验报告</p>
         </footer>
       </div>
     </div>
