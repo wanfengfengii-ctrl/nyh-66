@@ -11,17 +11,20 @@ import TrendChart from '@/components/TrendChart';
 import ExportPanel from '@/components/ExportPanel';
 import ProcessPlayback from '@/components/ProcessPlayback';
 import PlaybackRecordList from '@/components/PlaybackRecordList';
+import OptimizationDecisionPanel from '@/components/OptimizationDecisionPanel';
 import { useYarnStore } from '@/store/useStore';
 import { Layers } from 'lucide-react';
 
 export default function Home() {
   const loadExperiments = useYarnStore((state) => state.loadExperiments);
   const loadPlaybackRecords = useYarnStore((state) => state.loadPlaybackRecords);
+  const loadOptimizationRecords = useYarnStore((state) => state.loadOptimizationRecords);
 
   useEffect(() => {
     loadExperiments();
     loadPlaybackRecords();
-  }, [loadExperiments, loadPlaybackRecords]);
+    loadOptimizationRecords();
+  }, [loadExperiments, loadPlaybackRecords, loadOptimizationRecords]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -64,6 +67,7 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-3 space-y-6">
+            <OptimizationDecisionPanel />
             <ExperimentList />
             <PlaybackRecordList />
             <ExportPanel />
@@ -71,7 +75,7 @@ export default function Home() {
         </div>
 
         <footer className="mt-10 text-center text-slate-500 text-xs">
-          <p>调整参数观察纱线变化 · 工艺回放完整记录实验过程 · 智能推荐优化工艺 · 保存方案进行对比分析 · 导出实验报告</p>
+          <p>调整参数观察纱线变化 · 工艺回放完整记录实验过程 · 智能推荐优化工艺 · 多目标优化与异常预警 · 保存方案进行对比分析 · 导出实验报告</p>
         </footer>
       </div>
     </div>

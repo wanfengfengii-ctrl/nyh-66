@@ -86,3 +86,41 @@ export interface StableInterval {
 }
 
 export type RecommendTarget = 'twist' | 'stability';
+
+export type OptimizationSortKey = 'stability' | 'compliance' | 'cost';
+
+export interface OptimizedScheme {
+  id: string;
+  params: YarnParams;
+  metrics: YarnMetrics;
+  stabilityScore: number;
+  complianceScore: number;
+  costScore: number;
+  description: string;
+}
+
+export type AlertLevel = 'high' | 'medium' | 'low';
+export type AlertType = 'high_risk' | 'fluctuation' | 'out_of_range';
+
+export interface AlertItem {
+  id: string;
+  type: AlertType;
+  level: AlertLevel;
+  message: string;
+  params?: YarnParams;
+  metrics?: YarnMetrics;
+  timestamp: number;
+  dismissed: boolean;
+}
+
+export interface OptimizationRecord {
+  id: string;
+  name: string;
+  scheme: OptimizedScheme;
+  targets: {
+    targetTwist: number;
+    maxBreakRisk: number;
+    minUniformity: number;
+  };
+  createdAt: number;
+}

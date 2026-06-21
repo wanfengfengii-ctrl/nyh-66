@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import type { YarnParams, Experiment, Recommendation, RecommendTarget, Keyframe, PlaybackRecord, PlaybackState } from '@/types';
-import { DEFAULT_PARAMS, STORAGE_KEY, PLAYBACK_STORAGE_KEY, TWIST_THRESHOLDS, TWIST_LEVEL_LABELS, KEYFRAME_THROTTLE_MS } from '@/utils/constants';
-import { calculateYarnMetrics, generateId, recommendByTargetTwist, recommendByStability } from '@/utils/calculations';
+import type { YarnParams, Experiment, Recommendation, RecommendTarget, Keyframe, PlaybackRecord, PlaybackState, OptimizedScheme, OptimizationSortKey, AlertItem, OptimizationRecord } from '@/types';
+import { DEFAULT_PARAMS, STORAGE_KEY, PLAYBACK_STORAGE_KEY, OPTIMIZATION_STORAGE_KEY, TWIST_THRESHOLDS, TWIST_LEVEL_LABELS, KEYFRAME_THROTTLE_MS } from '@/utils/constants';
+import { calculateYarnMetrics, generateId, recommendByTargetTwist, recommendByStability, generateMultiObjectiveSchemes, sortSchemes, detectAnomalies, assessSchemeRisk } from '@/utils/calculations';
 
 interface YarnStore {
   params: YarnParams;
@@ -46,6 +46,36 @@ interface YarnStore {
   getPlaybackParams: () => YarnParams | null;
   getPlaybackMetrics: () => ReturnType<typeof calculateYarnMetrics> | null;
   setAutoRecord: (enabled: boolean) => void;
+  optimizationTargets: {
+    targetTwist: number;
+    maxBreakRisk: number;
+    minUniformity: number;
+  };
+  optimizationSchemes: OptimizedScheme[];
+  optimizationSortKey: OptimizationSortKey;
+  alerts: AlertItem[];
+  optimizationRecords: OptimizationRecord[];
+  autoGenerate: boolean;
+  realtimeMonitor: boolean;
+  selectedSchemeIds: string[];
+  setOptimizationTargets: (targets: Partial<{ targetTwist: number; maxBreakRisk: number; minUniformity: number }>) => void;
+  generateSchemes: () => void;
+  setOptimizationSortKey: (key: OptimizationSortKey) => void;
+  getSortedSchemes: () => OptimizedScheme[];
+  applyOptimizedScheme: (scheme: OptimizedScheme) => void;
+  addSchemeToCompare: (scheme: OptimizedScheme) => void;
+  saveOptimizationRecord: (scheme: OptimizedScheme, name: string) => boolean;
+  deleteOptimizationRecord: (id: string) => void;
+  loadOptimizationRecords: () => void;
+  refreshAlerts: () => void;
+  dismissAlert: (id: string) => void;
+  clearAlerts: () => void;
+  setAutoGenerate: (enabled: boolean) => void;
+  setRealtimeMonitor: (enabled: boolean) => void;
+  toggleSchemeSelection: (id: string) => void;
+  clearSchemeSelection: () => void;
+  addSelectedSchemesToCompare: () => void;
+  getSchemeRiskLevel: (scheme: OptimizedScheme) => 'high' | 'medium' | 'low';
 }
 
 function loadFromStorage(): Experiment[] {
@@ -81,6 +111,24 @@ function savePlaybackToStorage(records: PlaybackRecord[]) {
     localStorage.setItem(PLAYBACK_STORAGE_KEY, JSON.stringify(records));
   } catch {
     console.error('Failed to save playback records to storage');
+  }
+}
+
+function loadOptimizationFromStorage(): OptimizationRecord[] {
+  try {
+    const data = localStorage.getItem(OPTIMIZATION_STORAGE_KEY);
+    if (data) return JSON.parse(data);
+  } catch {
+    console.error('Failed to load optimization records from storage');
+  }
+  return [];
+}
+
+function saveOptimizationToStorage(records: OptimizationRecord[]) {
+  try {
+    localStorage.setItem(OPTIMIZATION_STORAGE_KEY, JSON.stringify(records));
+  } catch {
+    console.error('Failed to save optimization records to storage');
   }
 }
 
@@ -145,6 +193,18 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
   targetBreakRisk: 50,
   targetUniformity: 70,
   playback: createInitialPlaybackState(),
+  optimizationTargets: {
+    targetTwist: 500,
+    maxBreakRisk: 50,
+    minUniformity: 70,
+  },
+  optimizationSchemes: [],
+  optimizationSortKey: 'compliance',
+  alerts: [],
+  optimizationRecords: [],
+  autoGenerate: true,
+  realtimeMonitor: true,
+  selectedSchemeIds: [],
 
   setParams: (newParams) => {
     const { playback } = get();
@@ -602,5 +662,155 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
         autoRecord: enabled,
       },
     });
+  },
+
+  setOptimizationTargets: (targets) => {
+    set((state) => ({
+      optimizationTargets: { ...state.optimizationTargets, ...targets },
+    }));
+    if (get().autoGenerate) {
+      const { params } = get();
+      const updatedTargets = { ...get().optimizationTargets, ...targets };
+      const schemes = generateMultiObjectiveSchemes(
+        params,
+        updatedTargets.targetTwist,
+        updatedTargets.maxBreakRisk,
+        updatedTargets.minUniformity
+      );
+      set({ optimizationSchemes: schemes });
+    }
+  },
+
+  generateSchemes: () => {
+    const { params, optimizationTargets } = get();
+    const schemes = generateMultiObjectiveSchemes(
+      params,
+      optimizationTargets.targetTwist,
+      optimizationTargets.maxBreakRisk,
+      optimizationTargets.minUniformity
+    );
+    set({ optimizationSchemes: schemes });
+  },
+
+  setOptimizationSortKey: (key) => {
+    set({ optimizationSortKey: key });
+  },
+
+  getSortedSchemes: () => {
+    const { optimizationSchemes, optimizationSortKey } = get();
+    return sortSchemes(optimizationSchemes, optimizationSortKey);
+  },
+
+  applyOptimizedScheme: (scheme) => {
+    set({ params: { ...scheme.params } });
+  },
+
+  addSchemeToCompare: (scheme) => {
+    const { experiments } = get();
+    const existing = experiments.find(
+      (e) =>
+        e.params.spindleSpeed === scheme.params.spindleSpeed &&
+        e.params.draftSpeed === scheme.params.draftSpeed &&
+        e.params.fiberLength === scheme.params.fiberLength
+    );
+    if (existing) {
+      const { toggleSelected } = get();
+      toggleSelected(existing.id);
+      return;
+    }
+    const newExperiment: Experiment = {
+      id: scheme.id,
+      name: `优化方案 ${scheme.description.slice(0, 10)}`,
+      params: { ...scheme.params },
+      metrics: { ...scheme.metrics },
+      createdAt: Date.now(),
+    };
+    const updated = [...experiments, newExperiment];
+    set({ experiments: updated, selectedIds: [...get().selectedIds, newExperiment.id] });
+    saveToStorage(updated);
+  },
+
+  saveOptimizationRecord: (scheme, name) => {
+    const { optimizationTargets, optimizationRecords } = get();
+    const record: OptimizationRecord = {
+      id: generateId(),
+      name: name.trim() || `优化记录 ${optimizationRecords.length + 1}`,
+      scheme: { ...scheme },
+      targets: { ...optimizationTargets },
+      createdAt: Date.now(),
+    };
+    const updated = [...optimizationRecords, record];
+    set({ optimizationRecords: updated });
+    saveOptimizationToStorage(updated);
+    return true;
+  },
+
+  deleteOptimizationRecord: (id) => {
+    const { optimizationRecords } = get();
+    const updated = optimizationRecords.filter((r) => r.id !== id);
+    set({ optimizationRecords: updated });
+    saveOptimizationToStorage(updated);
+  },
+
+  loadOptimizationRecords: () => {
+    const records = loadOptimizationFromStorage();
+    set({ optimizationRecords: records });
+  },
+
+  refreshAlerts: () => {
+    const { params, playback } = get();
+    const metrics = calculateYarnMetrics(params);
+    const keyframes = playback.keyframes.length >= 3 ? playback.keyframes : undefined;
+    const newAlerts = detectAnomalies(params, metrics, keyframes);
+    set((state) => {
+      const kept = state.alerts.filter((a) => a.dismissed);
+      return { alerts: [...kept, ...newAlerts] };
+    });
+  },
+
+  dismissAlert: (id) => {
+    set((state) => ({
+      alerts: state.alerts.map((a) => (a.id === id ? { ...a, dismissed: true } : a)),
+    }));
+  },
+
+  clearAlerts: () => {
+    set({ alerts: [] });
+  },
+
+  setAutoGenerate: (enabled) => {
+    set({ autoGenerate: enabled });
+    if (enabled && get().optimizationSchemes.length === 0) {
+      get().generateSchemes();
+    }
+  },
+
+  setRealtimeMonitor: (enabled) => {
+    set({ realtimeMonitor: enabled });
+  },
+
+  toggleSchemeSelection: (id) => {
+    set((state) => ({
+      selectedSchemeIds: state.selectedSchemeIds.includes(id)
+        ? state.selectedSchemeIds.filter((sid) => sid !== id)
+        : [...state.selectedSchemeIds, id],
+    }));
+  },
+
+  clearSchemeSelection: () => {
+    set({ selectedSchemeIds: [] });
+  },
+
+  addSelectedSchemesToCompare: () => {
+    const { optimizationSchemes, selectedSchemeIds } = get();
+    const selectedSchemes = optimizationSchemes.filter((s) => selectedSchemeIds.includes(s.id));
+    selectedSchemes.forEach((scheme) => {
+      get().addSchemeToCompare(scheme);
+    });
+    set({ selectedSchemeIds: [] });
+  },
+
+  getSchemeRiskLevel: (scheme) => {
+    return assessSchemeRisk(scheme);
   },
 }));
