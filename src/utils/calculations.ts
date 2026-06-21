@@ -20,7 +20,11 @@ export function getTwistLevel(twist: number): TwistLevel {
 export function calculateBreakRisk(params: YarnParams, twist: number): number {
   const { fiberLength } = params;
 
-  const twistRiskFactor = Math.max(0, (twist - TWIST_THRESHOLDS.optimalMax) / 5);
+  const lowRisk = Math.max(0, (twist - TWIST_THRESHOLDS.lowMax) * 0.02);
+  const highRisk = twist > TWIST_THRESHOLDS.optimalMax
+    ? (twist - TWIST_THRESHOLDS.optimalMax) * 0.15
+    : 0;
+  const twistRiskFactor = lowRisk + highRisk;
   const fiberRiskFactor = Math.max(0, (50 - fiberLength) * 0.8);
   const baseRisk = 10;
 

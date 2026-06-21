@@ -10,6 +10,7 @@ export default function MetricCards() {
 
   const twistColor = TWIST_LEVEL_COLORS[metrics.twistLevel];
   const isBreakHigh = metrics.breakRisk >= BREAK_RISK_THRESHOLD;
+  const isBreakMedium = metrics.breakRisk >= 40 && !isBreakHigh;
 
   const cards = [
     {
@@ -28,11 +29,11 @@ export default function MetricCards() {
       value: metrics.breakRisk.toString(),
       unit: '%',
       icon: AlertTriangle,
-      color: isBreakHigh ? '#ef4444' : '#22c55e',
-      bgColor: isBreakHigh ? 'from-red-500/20 to-orange-500/10' : 'from-emerald-500/20 to-green-500/10',
-      borderColor: isBreakHigh ? 'border-red-500/30' : 'border-emerald-500/30',
-      subtext: isBreakHigh ? '危险' : '安全',
-      subtextColor: isBreakHigh ? 'text-red-400' : 'text-emerald-400',
+      color: isBreakHigh ? '#ef4444' : isBreakMedium ? '#eab308' : '#22c55e',
+      bgColor: isBreakHigh ? 'from-red-500/20 to-orange-500/10' : isBreakMedium ? 'from-yellow-500/20 to-amber-500/10' : 'from-emerald-500/20 to-green-500/10',
+      borderColor: isBreakHigh ? 'border-red-500/30' : isBreakMedium ? 'border-yellow-500/30' : 'border-emerald-500/30',
+      subtext: isBreakHigh ? '危险' : isBreakMedium ? '注意' : '安全',
+      subtextColor: isBreakHigh ? 'text-red-400' : isBreakMedium ? 'text-yellow-400' : 'text-emerald-400',
       highlight: isBreakHigh,
     },
     {

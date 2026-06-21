@@ -45,13 +45,13 @@ export default function YarnAnimation() {
     return segments;
   }, [metrics.twist]);
 
-  const yarnColor = metrics.breakRisk > 60
+  const yarnColor = metrics.breakRisk >= 70
     ? '#ef4444'
+    : metrics.twistLevel === 'high'
+    ? '#f59e0b'
     : metrics.twistLevel === 'optimal'
     ? '#10b981'
-    : metrics.twistLevel === 'low'
-    ? '#0ea5e9'
-    : '#f59e0b';
+    : '#0ea5e9';
 
   const twistNorm = Math.min(1, metrics.twist / TWIST_THRESHOLDS.optimalMax);
 
