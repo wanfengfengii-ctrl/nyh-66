@@ -6,7 +6,7 @@ import { TWIST_THRESHOLDS, TWIST_LEVEL_LABELS } from '@/utils/constants';
 export default function YarnAnimation() {
   const { params, playback, getPlaybackParams, getPlaybackMetrics } = useYarnStore();
   const baseMetrics = useMemo(() => calculateYarnMetrics(params), [params]);
-  const isPlaybackMode = playback.isPlaying || playback.isPaused;
+  const isPlaybackMode = playback.isPlaybackView;
   const playbackParams = isPlaybackMode ? getPlaybackParams() : null;
   const playbackMetrics = isPlaybackMode ? getPlaybackMetrics() : null;
   const displayParams = playbackParams || params;

@@ -45,6 +45,7 @@ interface YarnStore {
   loadPlaybackRecords: () => void;
   getPlaybackParams: () => YarnParams | null;
   getPlaybackMetrics: () => ReturnType<typeof calculateYarnMetrics> | null;
+  setAutoRecord: (enabled: boolean) => void;
 }
 
 function loadFromStorage(): Experiment[] {
@@ -88,6 +89,8 @@ function createInitialPlaybackState(): PlaybackState {
     isRecording: false,
     isPlaying: false,
     isPaused: false,
+    isPlaybackView: false,
+    autoRecord: true,
     currentTime: 0,
     duration: 0,
     playbackSpeed: 1,
@@ -148,7 +151,10 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
     set((state) => ({
       params: { ...state.params, ...newParams },
     }));
-    if (playback.isRecording) {
+
+    if (playback.autoRecord && !playback.isRecording && !playback.isPlaybackView && playback.keyframes.length === 0) {
+      get().startRecording();
+    } else if (playback.isRecording) {
       get().recordKeyframe(true);
     }
   },
@@ -307,6 +313,7 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
         isRecording: true,
         isPlaying: false,
         isPaused: false,
+        isPlaybackView: false,
         currentTime: 0,
         duration: 0,
         keyframes: [firstKeyframe],
@@ -326,6 +333,7 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
       playback: {
         ...playback,
         isRecording: false,
+        isPlaybackView: true,
         duration,
         currentTime: 0,
         currentKeyframeIdx: 0,
@@ -382,6 +390,7 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
         currentKeyframeIdx: -1,
         isPlaying: false,
         isPaused: false,
+        isPlaybackView: false,
         loadedRecord: null,
       },
     });
@@ -539,6 +548,7 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
         isPlaying: false,
         isPaused: false,
         isRecording: false,
+        isPlaybackView: true,
         loadedRecord: record,
       },
     }));
@@ -548,6 +558,13 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
     set((state) => ({
       playback: {
         ...state.playback,
+        keyframes: [],
+        currentTime: 0,
+        duration: 0,
+        currentKeyframeIdx: -1,
+        isPlaying: false,
+        isPaused: false,
+        isPlaybackView: false,
         loadedRecord: null,
       },
     }));
@@ -575,5 +592,15 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
     if (playback.keyframes.length === 0) return null;
     const { keyframe } = findKeyframeAtTime(playback.keyframes, playback.currentTime);
     return keyframe ? keyframe.metrics : null;
+  },
+
+  setAutoRecord: (enabled) => {
+    const { playback } = get();
+    set({
+      playback: {
+        ...playback,
+        autoRecord: enabled,
+      },
+    });
   },
 }));

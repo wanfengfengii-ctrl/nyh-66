@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   Sparkles,
   Zap,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function ProcessPlayback() {
@@ -40,6 +41,7 @@ export default function ProcessPlayback() {
     savePlaybackRecord,
     getPlaybackParams,
     getPlaybackMetrics,
+    setAutoRecord,
   } = useYarnStore();
 
   const [recordName, setRecordName] = useState('');
@@ -117,10 +119,24 @@ export default function ProcessPlayback() {
     <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 border border-slate-700/50 shadow-xl overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent"></div>
 
-      <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-        <span className="w-2 h-6 bg-purple-500 rounded-full"></span>
-        工艺回放
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <span className="w-2 h-6 bg-purple-500 rounded-full"></span>
+          工艺回放
+        </h2>
+        <button
+          onClick={() => setAutoRecord(!playback.autoRecord)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            playback.autoRecord
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              : 'bg-slate-700/50 text-slate-400 border border-slate-600/30 hover:bg-slate-700'
+          }`}
+          title={playback.autoRecord ? '关闭自动记录' : '开启自动记录'}
+        >
+          <RefreshCw size={12} className={playback.autoRecord ? 'animate-spin' : ''} style={{ animationDuration: '3s' }} />
+          自动记录
+        </button>
+      </div>
 
       <div className="mb-4 flex items-center gap-3 flex-wrap">
         {playback.isRecording ? (

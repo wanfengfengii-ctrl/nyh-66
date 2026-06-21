@@ -4,8 +4,11 @@ import { calculateYarnMetrics } from '@/utils/calculations';
 import { TWIST_THRESHOLDS, TWIST_LEVEL_COLORS, TWIST_LEVEL_LABELS } from '@/utils/constants';
 
 export default function StatusIndicator() {
-  const { params } = useYarnStore();
-  const metrics = useMemo(() => calculateYarnMetrics(params), [params]);
+  const { params, playback, getPlaybackMetrics } = useYarnStore();
+  const baseMetrics = useMemo(() => calculateYarnMetrics(params), [params]);
+  const isPlaybackMode = playback.isPlaybackView;
+  const playbackMetrics = isPlaybackMode ? getPlaybackMetrics() : null;
+  const metrics = playbackMetrics || baseMetrics;
 
   const minTwist = 0;
   const maxTwist = 1200;

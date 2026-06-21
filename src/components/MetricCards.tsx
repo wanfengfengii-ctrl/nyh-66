@@ -7,7 +7,7 @@ import { Activity, AlertTriangle, Sparkles } from 'lucide-react';
 export default function MetricCards() {
   const { params, playback, getPlaybackMetrics } = useYarnStore();
   const baseMetrics = useMemo(() => calculateYarnMetrics(params), [params]);
-  const isPlaybackMode = playback.isPlaying || playback.isPaused;
+  const isPlaybackMode = playback.isPlaybackView;
   const playbackMetrics = isPlaybackMode ? getPlaybackMetrics() : null;
   const displayMetrics = playbackMetrics || baseMetrics;
 

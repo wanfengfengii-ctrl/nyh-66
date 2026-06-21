@@ -34,6 +34,8 @@ export interface PlaybackState {
   isRecording: boolean;
   isPlaying: boolean;
   isPaused: boolean;
+  isPlaybackView: boolean;
+  autoRecord: boolean;
   currentTime: number;
   duration: number;
   playbackSpeed: number;
