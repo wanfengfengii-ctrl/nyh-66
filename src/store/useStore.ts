@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import type { YarnParams, Experiment, Recommendation, RecommendTarget, Keyframe, PlaybackRecord, PlaybackState, OptimizedScheme, OptimizationSortKey, AlertItem, OptimizationRecord } from '@/types';
-import { DEFAULT_PARAMS, STORAGE_KEY, PLAYBACK_STORAGE_KEY, OPTIMIZATION_STORAGE_KEY, TWIST_THRESHOLDS, TWIST_LEVEL_LABELS, KEYFRAME_THROTTLE_MS } from '@/utils/constants';
-import { calculateYarnMetrics, generateId, recommendByTargetTwist, recommendByStability, generateMultiObjectiveSchemes, sortSchemes, detectAnomalies, assessSchemeRisk } from '@/utils/calculations';
+import type { YarnParams, Experiment, Recommendation, RecommendTarget, Keyframe, PlaybackRecord, PlaybackState, OptimizedScheme, OptimizationSortKey, AlertItem, OptimizationRecord, Batch, BatchSample, BatchSummaryStats, BatchCategory, CategorizedBatch } from '@/types';
+import { DEFAULT_PARAMS, STORAGE_KEY, PLAYBACK_STORAGE_KEY, OPTIMIZATION_STORAGE_KEY, TWIST_THRESHOLDS, TWIST_LEVEL_LABELS, KEYFRAME_THROTTLE_MS, BATCH_STORAGE_KEY } from '@/utils/constants';
+import { calculateYarnMetrics, generateId, recommendByTargetTwist, recommendByStability, generateMultiObjectiveSchemes, sortSchemes, detectAnomalies, assessSchemeRisk, createBatchSample, calculateBatchSummary, categorizeBatch, assessBatch } from '@/utils/calculations';
 
 interface YarnStore {
   params: YarnParams;
@@ -76,6 +76,26 @@ interface YarnStore {
   clearSchemeSelection: () => void;
   addSelectedSchemesToCompare: () => void;
   getSchemeRiskLevel: (scheme: OptimizedScheme) => 'high' | 'medium' | 'low';
+  batches: Batch[];
+  activeBatchId: string | null;
+  batchTargetSpecs: {
+    targetTwist?: number;
+    maxBreakRisk?: number;
+    minUniformity?: number;
+  };
+  createBatch: (name?: string) => Batch;
+  deleteBatch: (id: string) => void;
+  setActiveBatch: (id: string | null) => void;
+  addSampleToBatch: (batchId: string, params: YarnParams) => BatchSample | null;
+  addSamplesToBatch: (batchId: string, paramsList: YarnParams[]) => BatchSample[];
+  removeSampleFromBatch: (batchId: string, sampleId: string) => void;
+  clearBatchSamples: (batchId: string) => void;
+  setBatchTargetSpecs: (specs: Partial<{ targetTwist: number; maxBreakRisk: number; minUniformity: number }>) => void;
+  getBatchSummary: (batchId: string) => BatchSummaryStats | null;
+  getBatchCategory: (batchId: string) => BatchCategory | null;
+  getCategorizedBatches: () => CategorizedBatch[];
+  loadBatches: () => void;
+  getActiveBatch: () => Batch | null;
 }
 
 function loadFromStorage(): Experiment[] {
@@ -129,6 +149,24 @@ function saveOptimizationToStorage(records: OptimizationRecord[]) {
     localStorage.setItem(OPTIMIZATION_STORAGE_KEY, JSON.stringify(records));
   } catch {
     console.error('Failed to save optimization records to storage');
+  }
+}
+
+function loadBatchesFromStorage(): Batch[] {
+  try {
+    const data = localStorage.getItem(BATCH_STORAGE_KEY);
+    if (data) return JSON.parse(data);
+  } catch {
+    console.error('Failed to load batches from storage');
+  }
+  return [];
+}
+
+function saveBatchesToStorage(batches: Batch[]) {
+  try {
+    localStorage.setItem(BATCH_STORAGE_KEY, JSON.stringify(batches));
+  } catch {
+    console.error('Failed to save batches to storage');
   }
 }
 
@@ -205,6 +243,13 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
   autoGenerate: true,
   realtimeMonitor: true,
   selectedSchemeIds: [],
+  batches: [],
+  activeBatchId: null,
+  batchTargetSpecs: {
+    targetTwist: 500,
+    maxBreakRisk: 50,
+    minUniformity: 70,
+  },
 
   setParams: (newParams) => {
     const { playback } = get();
@@ -812,5 +857,118 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
 
   getSchemeRiskLevel: (scheme) => {
     return assessSchemeRisk(scheme);
+  },
+
+  createBatch: (name) => {
+    const { batches, batchTargetSpecs } = get();
+    const newBatch: Batch = {
+      id: generateId(),
+      name: name?.trim() || `批次 ${batches.length + 1}`,
+      samples: [],
+      createdAt: Date.now(),
+      targetSpecs: { ...batchTargetSpecs },
+    };
+    const updated = [...batches, newBatch];
+    set({ batches: updated, activeBatchId: newBatch.id });
+    saveBatchesToStorage(updated);
+    return newBatch;
+  },
+
+  deleteBatch: (id) => {
+    set((state) => {
+      const updated = state.batches.filter((b) => b.id !== id);
+      const activeBatchId = state.activeBatchId === id ? null : state.activeBatchId;
+      saveBatchesToStorage(updated);
+      return { batches: updated, activeBatchId };
+    });
+  },
+
+  setActiveBatch: (id) => {
+    set({ activeBatchId: id });
+  },
+
+  addSampleToBatch: (batchId, params) => {
+    const { batches, batchTargetSpecs } = get();
+    const batch = batches.find((b) => b.id === batchId);
+    if (!batch) return null;
+
+    const sample = createBatchSample(params, batch.targetSpecs || batchTargetSpecs);
+    const updatedBatches = batches.map((b) =>
+      b.id === batchId ? { ...b, samples: [...b.samples, sample] } : b
+    );
+    set({ batches: updatedBatches });
+    saveBatchesToStorage(updatedBatches);
+    return sample;
+  },
+
+  addSamplesToBatch: (batchId, paramsList) => {
+    const { batches, batchTargetSpecs } = get();
+    const batch = batches.find((b) => b.id === batchId);
+    if (!batch) return [];
+
+    const newSamples = paramsList.map((p) => createBatchSample(p, batch.targetSpecs || batchTargetSpecs));
+    const updatedBatches = batches.map((b) =>
+      b.id === batchId ? { ...b, samples: [...b.samples, ...newSamples] } : b
+    );
+    set({ batches: updatedBatches });
+    saveBatchesToStorage(updatedBatches);
+    return newSamples;
+  },
+
+  removeSampleFromBatch: (batchId, sampleId) => {
+    const { batches } = get();
+    const updatedBatches = batches.map((b) =>
+      b.id === batchId ? { ...b, samples: b.samples.filter((s) => s.id !== sampleId) } : b
+    );
+    set({ batches: updatedBatches });
+    saveBatchesToStorage(updatedBatches);
+  },
+
+  clearBatchSamples: (batchId) => {
+    const { batches } = get();
+    const updatedBatches = batches.map((b) =>
+      b.id === batchId ? { ...b, samples: [] } : b
+    );
+    set({ batches: updatedBatches });
+    saveBatchesToStorage(updatedBatches);
+  },
+
+  setBatchTargetSpecs: (specs) => {
+    set((state) => ({
+      batchTargetSpecs: { ...state.batchTargetSpecs, ...specs },
+    }));
+  },
+
+  getBatchSummary: (batchId) => {
+    const { batches } = get();
+    const batch = batches.find((b) => b.id === batchId);
+    if (!batch) return null;
+    return calculateBatchSummary(batch);
+  },
+
+  getBatchCategory: (batchId) => {
+    const summary = get().getBatchSummary(batchId);
+    if (!summary) return null;
+    return categorizeBatch(summary);
+  },
+
+  getCategorizedBatches: () => {
+    const { batches } = get();
+    return batches.map((batch) => {
+      const summary = calculateBatchSummary(batch);
+      const category = categorizeBatch(summary);
+      return { batch, summary, category };
+    });
+  },
+
+  loadBatches: () => {
+    const batches = loadBatchesFromStorage();
+    set({ batches, activeBatchId: batches.length > 0 ? batches[0].id : null });
+  },
+
+  getActiveBatch: () => {
+    const { batches, activeBatchId } = get();
+    if (!activeBatchId) return null;
+    return batches.find((b) => b.id === activeBatchId) || null;
   },
 }));

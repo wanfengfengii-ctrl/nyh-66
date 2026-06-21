@@ -62,5 +62,66 @@ export const TWIST_LEVEL_LABELS: Record<string, string> = {
 export const STORAGE_KEY = 'yarn-twist-experiments';
 export const PLAYBACK_STORAGE_KEY = 'yarn-twist-playback-records';
 export const OPTIMIZATION_STORAGE_KEY = 'yarn-twist-optimization-records';
+export const BATCH_STORAGE_KEY = 'yarn-twist-batch-records';
 export const KEYFRAME_THROTTLE_MS = 200;
 export const PLAYBACK_SPEEDS = [0.5, 1, 2, 4];
+
+export const QUALITY_GRADE_THRESHOLDS = {
+  S: 90,
+  A: 75,
+  B: 60,
+  C: 40,
+  D: 0,
+};
+
+export const QUALITY_GRADE_LABELS: Record<string, string> = {
+  S: '特级优质',
+  A: '优质',
+  B: '合格',
+  C: '待改进',
+  D: '不合格',
+};
+
+export const QUALITY_GRADE_COLORS: Record<string, string> = {
+  S: '#a855f7',
+  A: '#10b981',
+  B: '#3b82f6',
+  C: '#f59e0b',
+  D: '#ef4444',
+};
+
+export const QUALITY_GRADE_BG: Record<string, string> = {
+  S: 'rgba(168, 85, 247, 0.15)',
+  A: 'rgba(16, 185, 129, 0.15)',
+  B: 'rgba(59, 130, 246, 0.15)',
+  C: 'rgba(245, 158, 11, 0.15)',
+  D: 'rgba(239, 68, 68, 0.15)',
+};
+
+export const PRODUCTION_ADVICE_LABELS: Record<string, string> = {
+  pass: '直接投产',
+  adjust: '微调后投产',
+  warning: '谨慎投产',
+  reject: '禁止投产',
+};
+
+export const PRODUCTION_ADVICE_COLORS: Record<string, string> = {
+  pass: '#10b981',
+  adjust: '#3b82f6',
+  warning: '#f59e0b',
+  reject: '#ef4444',
+};
+
+export const BATCH_CATEGORY_LABELS: Record<string, string> = {
+  premium: '优质批次',
+  normal: '正常批次',
+  risk: '风险批次',
+  reject: '不合格批次',
+};
+
+export const BATCH_CATEGORY_COLORS: Record<string, string> = {
+  premium: '#a855f7',
+  normal: '#10b981',
+  risk: '#f59e0b',
+  reject: '#ef4444',
+};

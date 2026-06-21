@@ -1,9 +1,10 @@
-import type { YarnParams, YarnMetrics, TwistLevel, Recommendation, StableInterval, StableIntervalPoint, OptimizedScheme, AlertItem } from '@/types';
+import type { YarnParams, YarnMetrics, TwistLevel, Recommendation, StableInterval, StableIntervalPoint, OptimizedScheme, AlertItem, QualityGrade, ProductionAdvice, BatchSample, Batch, BatchSummaryStats, BatchCategory, BatchAssessmentResult } from '@/types';
 import {
   TWIST_THRESHOLDS,
   BREAK_RISK_THRESHOLD,
   FEASIBLE_UNIFORMITY_MIN,
   PARAM_RANGES,
+  QUALITY_GRADE_THRESHOLDS,
 } from './constants';
 
 export function calculateTwist(params: YarnParams): number {
@@ -643,4 +644,248 @@ export function detectSchemeAnomalies(schemes: OptimizedScheme[]): AlertItem[] {
   }
 
   return alerts;
+}
+
+export function calculateQualityScore(
+  metrics: YarnMetrics,
+  targetTwist?: number
+): number {
+  const twistOptimal = (TWIST_THRESHOLDS.lowMax + TWIST_THRESHOLDS.optimalMax) / 2;
+  const twistTarget = targetTwist ?? twistOptimal;
+  const twistRange = TWIST_THRESHOLDS.optimalMax - TWIST_THRESHOLDS.lowMax;
+
+  const twistDeviation = Math.abs(metrics.twist - twistTarget);
+  const twistScore = Math.max(0, 100 - (twistDeviation / twistRange) * 80);
+
+  const breakRiskScore = Math.max(0, 100 - metrics.breakRisk * 1.5);
+  const uniformityScore = metrics.uniformity;
+
+  const feasibilityBonus = metrics.isFeasible ? 10 : -20;
+  const twistLevelBonus = metrics.twistLevel === 'optimal' ? 10 : metrics.twistLevel === 'low' ? 0 : -5;
+
+  const rawScore = (twistScore * 0.35) + (breakRiskScore * 0.35) + (uniformityScore * 0.3) + feasibilityBonus + twistLevelBonus;
+  return Math.min(100, Math.max(0, Math.round(rawScore)));
+}
+
+export function determineQualityGrade(qualityScore: number): QualityGrade {
+  if (qualityScore >= QUALITY_GRADE_THRESHOLDS.S) return 'S';
+  if (qualityScore >= QUALITY_GRADE_THRESHOLDS.A) return 'A';
+  if (qualityScore >= QUALITY_GRADE_THRESHOLDS.B) return 'B';
+  if (qualityScore >= QUALITY_GRADE_THRESHOLDS.C) return 'C';
+  return 'D';
+}
+
+export function determineProductionAdvice(
+  metrics: YarnMetrics,
+  qualityScore: number,
+  targetSpecs?: { targetTwist?: number; maxBreakRisk?: number; minUniformity?: number }
+): ProductionAdvice {
+  const maxRisk = targetSpecs?.maxBreakRisk ?? BREAK_RISK_THRESHOLD - 10;
+  const minUniform = targetSpecs?.minUniformity ?? FEASIBLE_UNIFORMITY_MIN + 20;
+
+  if (!metrics.isFeasible) return 'reject';
+  if (metrics.breakRisk >= BREAK_RISK_THRESHOLD) return 'reject';
+  if (metrics.uniformity < FEASIBLE_UNIFORMITY_MIN) return 'reject';
+  if (qualityScore < QUALITY_GRADE_THRESHOLDS.C) return 'reject';
+
+  if (metrics.breakRisk >= maxRisk) return 'warning';
+  if (metrics.uniformity < minUniform) return 'warning';
+  if (qualityScore < QUALITY_GRADE_THRESHOLDS.B) return 'warning';
+
+  if (metrics.breakRisk >= maxRisk - 10) return 'adjust';
+  if (metrics.uniformity < minUniform + 10) return 'adjust';
+  if (qualityScore < QUALITY_GRADE_THRESHOLDS.A) return 'adjust';
+
+  return 'pass';
+}
+
+export function createBatchSample(
+  params: YarnParams,
+  targetSpecs?: { targetTwist?: number; maxBreakRisk?: number; minUniformity?: number }
+): BatchSample {
+  const metrics = calculateYarnMetrics(params);
+  const qualityScore = calculateQualityScore(metrics, targetSpecs?.targetTwist);
+  const qualityGrade = determineQualityGrade(qualityScore);
+  const productionAdvice = determineProductionAdvice(metrics, qualityScore, targetSpecs);
+
+  return {
+    id: generateId(),
+    params: { ...params },
+    metrics,
+    qualityScore,
+    qualityGrade,
+    productionAdvice,
+  };
+}
+
+function coefficientOfVariation(values: number[]): number {
+  const n = values.length;
+  if (n < 2) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  if (mean === 0) return 0;
+  const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1);
+  return Math.sqrt(variance) / mean;
+}
+
+export function calculateBatchSummary(batch: Batch): BatchSummaryStats {
+  const { samples } = batch;
+  const totalSamples = samples.length;
+
+  if (totalSamples === 0) {
+    return {
+      totalSamples: 0,
+      avgTwist: 0,
+      avgBreakRisk: 0,
+      avgUniformity: 0,
+      avgQualityScore: 0,
+      twistCV: 0,
+      breakRiskCV: 0,
+      uniformityCV: 0,
+      qualityScoreCV: 0,
+      passRate: 0,
+      gradeDistribution: { S: 0, A: 0, B: 0, C: 0, D: 0 },
+      adviceDistribution: { pass: 0, adjust: 0, warning: 0, reject: 0 },
+      stabilityScore: 0,
+      isAnomalous: true,
+      anomalyReasons: ['批次为空'],
+    };
+  }
+
+  const twistValues = samples.map((s) => s.metrics.twist);
+  const breakRiskValues = samples.map((s) => s.metrics.breakRisk);
+  const uniformityValues = samples.map((s) => s.metrics.uniformity);
+  const qualityScoreValues = samples.map((s) => s.qualityScore);
+
+  const avgTwist = twistValues.reduce((a, b) => a + b, 0) / totalSamples;
+  const avgBreakRisk = breakRiskValues.reduce((a, b) => a + b, 0) / totalSamples;
+  const avgUniformity = uniformityValues.reduce((a, b) => a + b, 0) / totalSamples;
+  const avgQualityScore = qualityScoreValues.reduce((a, b) => a + b, 0) / totalSamples;
+
+  const twistCV = coefficientOfVariation(twistValues);
+  const breakRiskCV = coefficientOfVariation(breakRiskValues);
+  const uniformityCV = coefficientOfVariation(uniformityValues);
+  const qualityScoreCV = coefficientOfVariation(qualityScoreValues);
+
+  const passCount = samples.filter((s) => s.productionAdvice === 'pass' || s.productionAdvice === 'adjust').length;
+  const passRate = passCount / totalSamples;
+
+  const gradeDistribution: Record<QualityGrade, number> = { S: 0, A: 0, B: 0, C: 0, D: 0 };
+  samples.forEach((s) => {
+    gradeDistribution[s.qualityGrade]++;
+  });
+
+  const adviceDistribution: Record<ProductionAdvice, number> = { pass: 0, adjust: 0, warning: 0, reject: 0 };
+  samples.forEach((s) => {
+    adviceDistribution[s.productionAdvice]++;
+  });
+
+  const cvPenalty = (twistCV * 0.3 + breakRiskCV * 0.35 + uniformityCV * 0.2 + qualityScoreCV * 0.15) * 200;
+  const passRateBonus = passRate * 40;
+  const qualityBonus = (avgQualityScore / 100) * 40;
+  const stabilityScore = Math.min(100, Math.max(0, Math.round(passRateBonus + qualityBonus - cvPenalty + 20)));
+
+  const anomalyReasons: string[] = [];
+
+  if (adviceDistribution.reject > 0) {
+    anomalyReasons.push(`存在 ${adviceDistribution.reject} 个禁止投产样本`);
+  }
+  if (passRate < 0.6) {
+    anomalyReasons.push(`批次通过率仅 ${(passRate * 100).toFixed(1)}%，低于 60% 阈值`);
+  }
+  if (twistCV > 0.1) {
+    anomalyReasons.push(`捻度变异系数 ${(twistCV * 100).toFixed(1)}% 过高（>10%）`);
+  }
+  if (breakRiskCV > 0.2) {
+    anomalyReasons.push(`断线风险变异系数 ${(breakRiskCV * 100).toFixed(1)}% 过高（>20%）`);
+  }
+  if (uniformityCV > 0.1) {
+    anomalyReasons.push(`均匀度变异系数 ${(uniformityCV * 100).toFixed(1)}% 过高（>10%）`);
+  }
+  if (avgBreakRisk > BREAK_RISK_THRESHOLD - 15) {
+    anomalyReasons.push(`平均断线风险 ${avgBreakRisk.toFixed(1)}% 接近安全阈值`);
+  }
+  if (avgUniformity < FEASIBLE_UNIFORMITY_MIN + 20) {
+    anomalyReasons.push(`平均均匀度 ${avgUniformity.toFixed(1)} 分偏低`);
+  }
+  if (gradeDistribution.D > 0 || gradeDistribution.C > Math.ceil(totalSamples * 0.3)) {
+    anomalyReasons.push('不合格或待改进样本占比过高');
+  }
+
+  const isAnomalous = anomalyReasons.length > 0;
+
+  return {
+    totalSamples,
+    avgTwist: Math.round(avgTwist * 10) / 10,
+    avgBreakRisk: Math.round(avgBreakRisk),
+    avgUniformity: Math.round(avgUniformity),
+    avgQualityScore: Math.round(avgQualityScore),
+    twistCV: Math.round(twistCV * 1000) / 1000,
+    breakRiskCV: Math.round(breakRiskCV * 1000) / 1000,
+    uniformityCV: Math.round(uniformityCV * 1000) / 1000,
+    qualityScoreCV: Math.round(qualityScoreCV * 1000) / 1000,
+    passRate: Math.round(passRate * 1000) / 1000,
+    gradeDistribution,
+    adviceDistribution,
+    stabilityScore,
+    isAnomalous,
+    anomalyReasons,
+  };
+}
+
+export function categorizeBatch(summary: BatchSummaryStats): BatchCategory {
+  if (summary.adviceDistribution.reject > 0 || summary.passRate < 0.4) return 'reject';
+  if (summary.isAnomalous && summary.passRate < 0.7) return 'risk';
+  if (summary.stabilityScore >= 75 && summary.avgQualityScore >= 75 && summary.passRate >= 0.9) return 'premium';
+  if (summary.stabilityScore >= 50 && summary.passRate >= 0.7) return 'normal';
+  return 'risk';
+}
+
+export function generateBatchRecommendations(
+  summary: BatchSummaryStats,
+  targetSpecs?: { targetTwist?: number; maxBreakRisk?: number; minUniformity?: number }
+): string[] {
+  const recommendations: string[] = [];
+  const maxRisk = targetSpecs?.maxBreakRisk ?? BREAK_RISK_THRESHOLD - 10;
+  const minUniform = targetSpecs?.minUniformity ?? FEASIBLE_UNIFORMITY_MIN + 20;
+
+  if (summary.avgBreakRisk > maxRisk - 10) {
+    recommendations.push(`平均断线风险偏高（${summary.avgBreakRisk}%），建议降低纺车转速或提高牵伸速度`);
+  }
+  if (summary.avgUniformity < minUniform + 10) {
+    recommendations.push(`平均均匀度偏低（${summary.avgUniformity}分），建议增加纤维长度或调整捻度至适中区间`);
+  }
+  if (summary.twistCV > 0.05) {
+    recommendations.push(`捻度波动较大（CV ${(summary.twistCV * 100).toFixed(1)}%），建议稳定工艺参数减少调整`);
+  }
+  if (summary.breakRiskCV > 0.1) {
+    recommendations.push(`断线风险波动较大（CV ${(summary.breakRiskCV * 100).toFixed(1)}%），请检查原料一致性`);
+  }
+  if (summary.gradeDistribution.S + summary.gradeDistribution.A >= summary.totalSamples * 0.8) {
+    recommendations.push('优质品率高，当前工艺参数组合表现优秀，可作为标准工艺推广');
+  }
+  if (summary.adviceDistribution.reject > 0) {
+    recommendations.push(`存在 ${summary.adviceDistribution.reject} 个不合格样本，建议剔除相关参数组合`);
+  }
+  if (summary.passRate >= 0.9 && summary.stabilityScore >= 70) {
+    recommendations.push('批次整体表现稳定，建议进入批量生产阶段');
+  }
+  if (summary.gradeDistribution.D > 0) {
+    recommendations.push(`发现 ${summary.gradeDistribution.D} 个D级样本，需要重点排查其参数组合`);
+  }
+
+  if (recommendations.length === 0) {
+    recommendations.push('批次各项指标表现良好，可按当前工艺继续生产');
+  }
+
+  return recommendations;
+}
+
+export function assessBatch(batch: Batch): BatchAssessmentResult {
+  const summary = calculateBatchSummary(batch);
+  const recommendations = generateBatchRecommendations(summary, batch.targetSpecs);
+  return {
+    summary,
+    recommendations,
+    anomalies: summary.anomalyReasons,
+  };
 }

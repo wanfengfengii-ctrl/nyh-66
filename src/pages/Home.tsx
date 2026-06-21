@@ -12,19 +12,25 @@ import ExportPanel from '@/components/ExportPanel';
 import ProcessPlayback from '@/components/ProcessPlayback';
 import PlaybackRecordList from '@/components/PlaybackRecordList';
 import OptimizationDecisionPanel from '@/components/OptimizationDecisionPanel';
+import BatchInputPanel from '@/components/BatchInputPanel';
+import BatchSampleList from '@/components/BatchSampleList';
+import BatchSummaryPanel from '@/components/BatchSummaryPanel';
+import BatchCategoryPanel from '@/components/BatchCategoryPanel';
 import { useYarnStore } from '@/store/useStore';
-import { Layers } from 'lucide-react';
+import { Layers, Factory } from 'lucide-react';
 
 export default function Home() {
   const loadExperiments = useYarnStore((state) => state.loadExperiments);
   const loadPlaybackRecords = useYarnStore((state) => state.loadPlaybackRecords);
   const loadOptimizationRecords = useYarnStore((state) => state.loadOptimizationRecords);
+  const loadBatches = useYarnStore((state) => state.loadBatches);
 
   useEffect(() => {
     loadExperiments();
     loadPlaybackRecords();
     loadOptimizationRecords();
-  }, [loadExperiments, loadPlaybackRecords, loadOptimizationRecords]);
+    loadBatches();
+  }, [loadExperiments, loadPlaybackRecords, loadOptimizationRecords, loadBatches]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -74,8 +80,39 @@ export default function Home() {
           </div>
         </div>
 
+        <div className="mt-10">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="p-3 bg-gradient-to-br from-purple-500 to-fuchsia-600 rounded-xl shadow-lg shadow-purple-500/20">
+              <Factory className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                纱线质量预测与批次评估
+              </h2>
+              <p className="text-slate-400 text-sm mt-0.5">
+                批量参数录入 · 质量等级评定 · 批次稳定性分析 · 异常识别 · 生产决策建议
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-4 space-y-6">
+              <BatchInputPanel />
+              <BatchCategoryPanel />
+            </div>
+
+            <div className="lg:col-span-4 space-y-6">
+              <BatchSampleList />
+            </div>
+
+            <div className="lg:col-span-4 space-y-6">
+              <BatchSummaryPanel />
+            </div>
+          </div>
+        </div>
+
         <footer className="mt-10 text-center text-slate-500 text-xs">
-          <p>调整参数观察纱线变化 · 工艺回放完整记录实验过程 · 智能推荐优化工艺 · 多目标优化与异常预警 · 保存方案进行对比分析 · 导出实验报告</p>
+          <p>调整参数观察纱线变化 · 工艺回放完整记录实验过程 · 智能推荐优化工艺 · 多目标优化与异常预警 · 保存方案进行对比分析 · 导出实验报告 · 纱线质量预测与批次评估</p>
         </footer>
       </div>
     </div>

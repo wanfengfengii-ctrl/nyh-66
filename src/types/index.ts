@@ -124,3 +124,61 @@ export interface OptimizationRecord {
   };
   createdAt: number;
 }
+
+export type QualityGrade = 'S' | 'A' | 'B' | 'C' | 'D';
+
+export type ProductionAdvice = 'pass' | 'adjust' | 'reject' | 'warning';
+
+export interface BatchSample {
+  id: string;
+  params: YarnParams;
+  metrics: YarnMetrics;
+  qualityGrade: QualityGrade;
+  qualityScore: number;
+  productionAdvice: ProductionAdvice;
+  notes?: string;
+}
+
+export interface Batch {
+  id: string;
+  name: string;
+  samples: BatchSample[];
+  createdAt: number;
+  targetSpecs: {
+    targetTwist?: number;
+    maxBreakRisk?: number;
+    minUniformity?: number;
+  };
+}
+
+export interface BatchSummaryStats {
+  totalSamples: number;
+  avgTwist: number;
+  avgBreakRisk: number;
+  avgUniformity: number;
+  avgQualityScore: number;
+  twistCV: number;
+  breakRiskCV: number;
+  uniformityCV: number;
+  qualityScoreCV: number;
+  passRate: number;
+  gradeDistribution: Record<QualityGrade, number>;
+  adviceDistribution: Record<ProductionAdvice, number>;
+  stabilityScore: number;
+  isAnomalous: boolean;
+  anomalyReasons: string[];
+}
+
+export type BatchCategory = 'premium' | 'normal' | 'risk' | 'reject';
+
+export interface CategorizedBatch {
+  batch: Batch;
+  summary: BatchSummaryStats;
+  category: BatchCategory;
+}
+
+export interface BatchAssessmentResult {
+  summary: BatchSummaryStats;
+  recommendations: string[];
+  anomalies: string[];
+}
