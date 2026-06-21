@@ -5,6 +5,10 @@ import MetricCards from '@/components/MetricCards';
 import StatusIndicator from '@/components/StatusIndicator';
 import ExperimentList from '@/components/ExperimentList';
 import CompareChart from '@/components/CompareChart';
+import SmartRecommendation from '@/components/SmartRecommendation';
+import StableIntervalChart from '@/components/StableIntervalChart';
+import TrendChart from '@/components/TrendChart';
+import ExportPanel from '@/components/ExportPanel';
 import { useYarnStore } from '@/store/useStore';
 import { Layers } from 'lucide-react';
 
@@ -33,7 +37,7 @@ export default function Home() {
                 纺车捻度模拟器
               </h1>
               <p className="text-slate-400 text-sm mt-0.5">
-                探索传统纺纱工艺，实时模拟纱线捻度形成过程
+                探索传统纺纱工艺 · 智能参数推荐 · 实验趋势分析与报告导出
               </p>
             </div>
           </div>
@@ -42,6 +46,7 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-3 space-y-6">
             <ControlPanel />
+            <SmartRecommendation />
             <StatusIndicator />
           </div>
 
@@ -49,15 +54,18 @@ export default function Home() {
             <YarnAnimation />
             <MetricCards />
             <CompareChart />
+            <StableIntervalChart />
+            <TrendChart />
           </div>
 
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-3 space-y-6">
             <ExperimentList />
+            <ExportPanel />
           </div>
         </div>
 
         <footer className="mt-10 text-center text-slate-500 text-xs">
-          <p>调整参数观察纱线变化 · 保存方案进行对比分析</p>
+          <p>调整参数观察纱线变化 · 智能推荐优化工艺 · 保存方案进行对比分析 · 导出实验报告</p>
         </footer>
       </div>
     </div>

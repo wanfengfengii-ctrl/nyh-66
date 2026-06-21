@@ -30,3 +30,28 @@ export interface ParamRange {
   unit: string;
   label: string;
 }
+
+export interface Recommendation {
+  params: YarnParams;
+  metrics: YarnMetrics;
+  description: string;
+  targetMet: boolean;
+}
+
+export interface StableIntervalPoint {
+  value: number;
+  breakRisk: number;
+  uniformity: number;
+  isFeasible: boolean;
+  twistLevel: TwistLevel;
+}
+
+export interface StableInterval {
+  param: keyof YarnParams;
+  points: StableIntervalPoint[];
+  currentIdx: number;
+  lowBound: number;
+  highBound: number;
+}
+
+export type RecommendTarget = 'twist' | 'stability';

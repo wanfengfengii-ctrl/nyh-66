@@ -47,4 +47,16 @@ export const TWIST_LEVEL_COLORS = {
   high: '#D97706',
 };
 
+export const TWIST_LEVEL_BG = {
+  low: 'rgba(2,132,199,0.15)',
+  optimal: 'rgba(5,150,105,0.15)',
+  high: 'rgba(217,119,6,0.15)',
+};
+
+export const TWIST_LEVEL_LABELS: Record<string, string> = {
+  low: '低捻',
+  optimal: '适中',
+  high: '过捻',
+};
+
 export const STORAGE_KEY = 'yarn-twist-experiments';

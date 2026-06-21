@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useYarnStore } from '@/store/useStore';
 import { calculateYarnMetrics } from '@/utils/calculations';
-import { TWIST_LEVEL_COLORS } from '@/utils/constants';
+import { TWIST_LEVEL_COLORS, TWIST_LEVEL_LABELS } from '@/utils/constants';
 import {
   BarChart,
   Bar,
@@ -17,18 +17,13 @@ import {
   PolarRadiusAxis,
   Radar,
   Cell,
+  ReferenceLine,
 } from 'recharts';
 import { BarChart3, Radar as RadarIcon } from 'lucide-react';
 import { useState } from 'react';
 import type { TwistLevel } from '@/types';
 
 type ChartType = 'bar' | 'radar';
-
-const TWIST_LABELS: Record<TwistLevel, string> = {
-  low: '低捻',
-  optimal: '适中',
-  high: '过捻',
-};
 
 interface ChartEntry {
   name: string;
@@ -122,7 +117,7 @@ export default function CompareChart() {
                 color: TWIST_LEVEL_COLORS[entry.twistLevel],
               }}
             >
-              {TWIST_LABELS[entry.twistLevel]}
+              {TWIST_LEVEL_LABELS[entry.twistLevel]}
             </span>
           )}
           {entry?.isCurrent && (
@@ -204,6 +199,7 @@ export default function CompareChart() {
       <div className="flex flex-wrap gap-2 mb-4">
         {allEntries.map((entry, idx) => {
           const color = entry.isCurrent ? '#a78bfa' : TWIST_LEVEL_COLORS[entry.twistLevel];
+          const label = TWIST_LEVEL_LABELS[entry.twistLevel];
           return (
             <span
               key={idx}
@@ -212,7 +208,7 @@ export default function CompareChart() {
             >
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
               {entry.name}
-              <span className="opacity-70">({TWIST_LABELS[entry.twistLevel]})</span>
+              <span className="opacity-70">({label})</span>
               {entry.isCurrent && <span className="text-violet-300 opacity-70">●</span>}
             </span>
           );
@@ -231,13 +227,14 @@ export default function CompareChart() {
                 tick={({ x, y, payload }) => {
                   const entry = barData[payload.index];
                   const color = entry?.isCurrent ? '#a78bfa' : TWIST_LEVEL_COLORS[entry?.twistLevel || 'optimal'];
+                  const label = entry ? TWIST_LEVEL_LABELS[entry.twistLevel] : '';
                   return (
                     <g>
                       <text x={x} y={y + 14} textAnchor="middle" fill={color} fontSize={11} fontWeight="600">
                         {payload.value}
                       </text>
                       <text x={x} y={y + 26} textAnchor="middle" fill={color} fontSize={9} opacity={0.7}>
-                        {entry ? TWIST_LABELS[entry.twistLevel] : ''}
+                        {label}
                       </text>
                     </g>
                   );
@@ -294,7 +291,7 @@ export default function CompareChart() {
               {allEntries.map((entry, index) => (
                 <Radar
                   key={index}
-                  name={`${entry.name}(${TWIST_LABELS[entry.twistLevel]})`}
+                  name={`${entry.name}(${TWIST_LEVEL_LABELS[entry.twistLevel]})`}
                   dataKey={entry.name}
                   stroke={radarColors[index]}
                   fill={radarColors[index]}
@@ -314,7 +311,16 @@ export default function CompareChart() {
           {twistDistribution.map(({ level, count, percentage }) => (
             <div key={level} className="flex-1">
               <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-slate-400">{TWIST_LABELS[level]}</span>
+                <span
+                  className="font-medium flex items-center gap-1"
+                  style={{ color: TWIST_LEVEL_COLORS[level] }}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: TWIST_LEVEL_COLORS[level] }}
+                  />
+                  {TWIST_LEVEL_LABELS[level]}
+                </span>
                 <span className="text-white font-medium">{count}</span>
               </div>
               <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
