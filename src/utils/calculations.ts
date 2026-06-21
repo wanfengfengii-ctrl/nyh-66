@@ -93,16 +93,23 @@ export function recommendByTargetTwist(
   const draftRange = PARAM_RANGES.draftSpeed;
 
   const baseDraft = currentParams.draftSpeed;
-  const baseSpeed = (targetTwist / 10) * baseDraft;
-  const clampedSpeed = Math.max(speedRange.min, Math.min(speedRange.max, Math.round(baseSpeed)));
+  const neededSpeed = (targetTwist / 10) * baseDraft;
+  const clampedSpeed = Math.max(speedRange.min, Math.min(speedRange.max, Math.round(neededSpeed)));
   const p1: YarnParams = { spindleSpeed: clampedSpeed, draftSpeed: baseDraft, fiberLength };
   const m1 = calculateYarnMetrics(p1);
   if (m1.isFeasible) {
+    const absDiff = Math.abs(m1.twist - targetTwist);
+    const isReached = absDiff < 50;
+    const rawDiff = m1.twist - targetTwist;
+    const diffStr = rawDiff > 0 ? `+${rawDiff.toFixed(0)}` : rawDiff.toFixed(0);
+    const desc = isReached
+      ? `调整转速至 ${clampedSpeed} rpm（牵伸不变）`
+      : `转速限制下最接近：${clampedSpeed} rpm（实际捻度 ${diffStr}）`;
     results.push({
       params: p1,
       metrics: m1,
-      description: `调整转速至 ${clampedSpeed} rpm（牵伸不变）`,
-      targetMet: Math.abs(m1.twist - targetTwist) < 20,
+      description: desc,
+      targetMet: absDiff < 50,
     });
   }
 
@@ -112,11 +119,18 @@ export function recommendByTargetTwist(
   const p2: YarnParams = { spindleSpeed: baseSpeed2, draftSpeed: clampedDraft, fiberLength };
   const m2 = calculateYarnMetrics(p2);
   if (m2.isFeasible) {
+    const absDiff = Math.abs(m2.twist - targetTwist);
+    const isReached = absDiff < 50;
+    const rawDiff = m2.twist - targetTwist;
+    const diffStr = rawDiff > 0 ? `+${rawDiff.toFixed(0)}` : rawDiff.toFixed(0);
+    const desc = isReached
+      ? `调整牵伸至 ${clampedDraft} m/min（转速不变）`
+      : `牵伸限制下最接近：${clampedDraft} m/min（实际捻度 ${diffStr}）`;
     results.push({
       params: p2,
       metrics: m2,
-      description: `调整牵伸至 ${clampedDraft} m/min（转速不变）`,
-      targetMet: Math.abs(m2.twist - targetTwist) < 20,
+      description: desc,
+      targetMet: absDiff < 50,
     });
   }
 
@@ -126,15 +140,33 @@ export function recommendByTargetTwist(
   const p3: YarnParams = { spindleSpeed: clampedOptSpeed, draftSpeed: optimalDraft, fiberLength };
   const m3 = calculateYarnMetrics(p3);
   if (m3.isFeasible && !(clampedOptSpeed === clampedSpeed && optimalDraft === baseDraft)) {
+    const absDiff = Math.abs(m3.twist - targetTwist);
+    const isReached = absDiff < 50;
+    const rawDiff = m3.twist - targetTwist;
+    const diffStr = rawDiff > 0 ? `+${rawDiff.toFixed(0)}` : rawDiff.toFixed(0);
+    const desc = isReached
+      ? `推荐转速 ${clampedOptSpeed} rpm + 牵伸 ${optimalDraft} m/min`
+      : `综合方案：${clampedOptSpeed} rpm / ${optimalDraft} m/min（实际捻度 ${diffStr}）`;
     results.push({
       params: p3,
       metrics: m3,
-      description: `推荐转速 ${clampedOptSpeed} rpm + 牵伸 ${optimalDraft} m/min`,
-      targetMet: Math.abs(m3.twist - targetTwist) < 20,
+      description: desc,
+      targetMet: absDiff < 50,
     });
   }
 
-  return results.filter((r) => r.targetMet || r.metrics.twistLevel === 'optimal');
+  const sorted = results
+    .slice()
+    .sort((a, b) => Math.abs(a.metrics.twist - targetTwist) - Math.abs(b.metrics.twist - targetTwist));
+
+  const topResults = sorted.slice(0, 3);
+  const bestDiff = topResults.length > 0 ? Math.abs(topResults[0].metrics.twist - targetTwist) : Infinity;
+
+  if (bestDiff > 300) {
+    return [];
+  }
+
+  return topResults;
 }
 
 export function recommendByStability(

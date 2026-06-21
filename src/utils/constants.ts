@@ -60,3 +60,6 @@ export const TWIST_LEVEL_LABELS: Record<string, string> = {
 };
 
 export const STORAGE_KEY = 'yarn-twist-experiments';
+export const PLAYBACK_STORAGE_KEY = 'yarn-twist-playback-records';
+export const KEYFRAME_THROTTLE_MS = 200;
+export const PLAYBACK_SPEEDS = [0.5, 1, 2, 4];

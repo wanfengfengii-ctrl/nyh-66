@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useYarnStore } from '@/store/useStore';
 import { calculateYarnMetrics } from '@/utils/calculations';
-import { TWIST_THRESHOLDS, TWIST_LEVEL_COLORS } from '@/utils/constants';
+import { TWIST_THRESHOLDS, TWIST_LEVEL_COLORS, TWIST_LEVEL_LABELS } from '@/utils/constants';
 
 export default function StatusIndicator() {
   const { params } = useYarnStore();
@@ -16,9 +16,9 @@ export default function StatusIndicator() {
   const optimalEnd = (TWIST_THRESHOLDS.optimalMax / maxTwist) * 100;
 
   const labels = [
-    { label: '低捻', pos: lowEnd / 2, color: 'text-sky-400' },
-    { label: '适中', pos: (lowEnd + optimalEnd) / 2, color: 'text-emerald-400' },
-    { label: '过捻', pos: (optimalEnd + 100) / 2, color: 'text-amber-400' },
+    { label: TWIST_LEVEL_LABELS.low, pos: lowEnd / 2, color: 'text-sky-400' },
+    { label: TWIST_LEVEL_LABELS.optimal, pos: (lowEnd + optimalEnd) / 2, color: 'text-emerald-400' },
+    { label: TWIST_LEVEL_LABELS.high, pos: (optimalEnd + 100) / 2, color: 'text-amber-400' },
   ];
 
   return (

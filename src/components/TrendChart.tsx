@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useYarnStore } from '@/store/useStore';
+import { calculateYarnMetrics } from '@/utils/calculations';
 import { TWIST_LEVEL_COLORS, TWIST_LEVEL_LABELS } from '@/utils/constants';
 import { TrendingUp } from 'lucide-react';
 import {
@@ -24,7 +25,7 @@ const METRIC_CONFIG: Record<TrendMetric, { label: string; color: string; unit: s
 };
 
 export default function TrendChart() {
-  const { experiments } = useYarnStore();
+  const { experiments, params } = useYarnStore();
   const [metric, setMetric] = useState<TrendMetric>('twist');
 
   const sortedExperiments = useMemo(
@@ -32,8 +33,10 @@ export default function TrendChart() {
     [experiments]
   );
 
+  const currentMetrics = useMemo(() => calculateYarnMetrics(params), [params]);
+
   const trendData = useMemo(() => {
-    return sortedExperiments.map((exp, idx) => ({
+    const saved = sortedExperiments.map((exp, idx) => ({
       index: idx + 1,
       name: exp.name.length > 8 ? exp.name.slice(0, 8) + '..' : exp.name,
       twist: exp.metrics.twist,
@@ -41,8 +44,20 @@ export default function TrendChart() {
       uniformity: exp.metrics.uniformity,
       twistLevel: exp.metrics.twistLevel,
       createdAt: exp.createdAt,
+      isCurrent: false,
     }));
-  }, [sortedExperiments]);
+    const current = {
+      index: saved.length + 1,
+      name: '当前方案',
+      twist: currentMetrics.twist,
+      breakRisk: currentMetrics.breakRisk,
+      uniformity: currentMetrics.uniformity,
+      twistLevel: currentMetrics.twistLevel,
+      createdAt: Date.now(),
+      isCurrent: true,
+    };
+    return [...saved, current];
+  }, [sortedExperiments, currentMetrics]);
 
   const config = METRIC_CONFIG[metric];
 
@@ -56,8 +71,8 @@ export default function TrendChart() {
         <div className="h-48 flex items-center justify-center text-slate-500">
           <div className="text-center">
             <TrendingUp size={36} className="mx-auto mb-2 opacity-50" />
-            <p className="text-sm">需要至少2组实验数据</p>
-            <p className="text-xs mt-1">保存更多方案后查看趋势变化</p>
+            <p className="text-sm">保存至少1组实验后可查看趋势</p>
+            <p className="text-xs mt-1">趋势将包含当前方案与历史实验对比</p>
           </div>
         </div>
       </div>
@@ -65,9 +80,9 @@ export default function TrendChart() {
   }
 
   const twistDistribution = {
-    low: sortedExperiments.filter((e) => e.metrics.twistLevel === 'low').length,
-    optimal: sortedExperiments.filter((e) => e.metrics.twistLevel === 'optimal').length,
-    high: sortedExperiments.filter((e) => e.metrics.twistLevel === 'high').length,
+    low: trendData.filter((e) => e.twistLevel === 'low').length,
+    optimal: trendData.filter((e) => e.twistLevel === 'optimal').length,
+    high: trendData.filter((e) => e.twistLevel === 'high').length,
   };
 
   return (
@@ -98,7 +113,7 @@ export default function TrendChart() {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-3">
+      <div className="flex gap-2 mb-3 flex-wrap">
         {(['low', 'optimal', 'high'] as const).map((level) => {
           const count = twistDistribution[level];
           if (count === 0) return null;
@@ -113,6 +128,9 @@ export default function TrendChart() {
             </span>
           );
         })}
+        <span className="px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 bg-violet-500/20 text-violet-300">
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />当前方案
+        </span>
       </div>
 
       <div className="h-52">
@@ -131,9 +149,13 @@ export default function TrendChart() {
               fontSize={10}
               tick={({ x, y, payload }) => {
                 const entry = trendData[payload.index];
-                const color = entry ? TWIST_LEVEL_COLORS[entry.twistLevel] : '#64748b';
+                const color = entry?.isCurrent
+                  ? '#a78bfa'
+                  : entry
+                    ? TWIST_LEVEL_COLORS[entry.twistLevel]
+                    : '#64748b';
                 return (
-                  <text x={x} y={y + 12} textAnchor="middle" fill={color} fontSize={9} fontWeight="500">
+                  <text x={x} y={y + 12} textAnchor="middle" fill={color} fontSize={9} fontWeight={entry?.isCurrent ? 'bold' : '500'}>
                     {payload.value}
                   </text>
                 );
@@ -158,7 +180,9 @@ export default function TrendChart() {
                 const entry = payload[0]?.payload;
                 if (!entry) return '';
                 const d = new Date(entry.createdAt);
-                return `${entry.name} (${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')})`;
+                const twistLabel = TWIST_LEVEL_LABELS[entry.twistLevel];
+                const currentTag = entry.isCurrent ? ' · 当前方案' : '';
+                return `${entry.name} (${twistLabel}${currentTag}) · ${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
               }}
             />
             {metric === 'twist' && (
@@ -184,8 +208,8 @@ export default function TrendChart() {
               {trendData.map((entry, idx) => (
                 <Cell
                   key={idx}
-                  fill={TWIST_LEVEL_COLORS[entry.twistLevel]}
-                  stroke={TWIST_LEVEL_COLORS[entry.twistLevel]}
+                  fill={entry.isCurrent ? '#a78bfa' : TWIST_LEVEL_COLORS[entry.twistLevel]}
+                  stroke={entry.isCurrent ? '#a78bfa' : TWIST_LEVEL_COLORS[entry.twistLevel]}
                 />
               ))}
             </Line>
@@ -194,12 +218,15 @@ export default function TrendChart() {
       </div>
 
       {metric === 'twist' && (
-        <div className="flex gap-4 mt-2 text-xs">
+        <div className="flex gap-4 mt-2 text-xs flex-wrap">
           <span className="flex items-center gap-1 text-sky-400">
             <span className="w-3 h-0.5 border-t-2 border-dashed border-sky-500" /> 低捻界线 (300)
           </span>
           <span className="flex items-center gap-1 text-amber-400">
             <span className="w-3 h-0.5 border-t-2 border-dashed border-amber-500" /> 过捻界线 (800)
+          </span>
+          <span className="flex items-center gap-1 text-violet-400">
+            <span className="w-2 h-2 rounded-full bg-violet-400" /> 当前方案
           </span>
         </div>
       )}

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useYarnStore } from '@/store/useStore';
 import { calculateYarnMetrics } from '@/utils/calculations';
-import { TWIST_LEVEL_COLORS, BREAK_RISK_THRESHOLD } from '@/utils/constants';
+import { TWIST_LEVEL_COLORS, BREAK_RISK_THRESHOLD, TWIST_LEVEL_LABELS } from '@/utils/constants';
 import { Activity, AlertTriangle, Sparkles } from 'lucide-react';
 
 export default function MetricCards() {
@@ -12,6 +12,8 @@ export default function MetricCards() {
   const isBreakHigh = metrics.breakRisk >= BREAK_RISK_THRESHOLD;
   const isBreakMedium = metrics.breakRisk >= 40 && !isBreakHigh;
 
+  const twistSubtextColor = metrics.twistLevel === 'low' ? 'text-sky-400' : metrics.twistLevel === 'optimal' ? 'text-emerald-400' : 'text-amber-400';
+
   const cards = [
     {
       label: '捻度',
@@ -21,8 +23,8 @@ export default function MetricCards() {
       color: twistColor,
       bgColor: 'from-teal-500/20 to-cyan-500/10',
       borderColor: 'border-teal-500/30',
-      subtext: metrics.twistLevel === 'low' ? '低捻' : metrics.twistLevel === 'optimal' ? '适中' : '过捻',
-      subtextColor: metrics.twistLevel === 'low' ? 'text-sky-400' : metrics.twistLevel === 'optimal' ? 'text-emerald-400' : 'text-amber-400',
+      subtext: TWIST_LEVEL_LABELS[metrics.twistLevel],
+      subtextColor: twistSubtextColor,
     },
     {
       label: '断线风险',

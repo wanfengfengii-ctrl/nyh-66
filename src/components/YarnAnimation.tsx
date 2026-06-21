@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 import { useYarnStore } from '@/store/useStore';
 import { calculateYarnMetrics } from '@/utils/calculations';
-import { TWIST_THRESHOLDS } from '@/utils/constants';
+import { TWIST_THRESHOLDS, TWIST_LEVEL_LABELS } from '@/utils/constants';
 
 export default function YarnAnimation() {
   const { params } = useYarnStore();
@@ -170,7 +170,7 @@ export default function YarnAnimation() {
               {metrics.twist.toFixed(1)} 捻/m
             </text>
             <text y="16" textAnchor="middle" fill="#64748b" fontSize="10">
-              {metrics.twistLevel === 'low' ? '低捻' : metrics.twistLevel === 'optimal' ? '适中捻度' : '高捻'}
+              {TWIST_LEVEL_LABELS[metrics.twistLevel]}
             </text>
           </g>
         </svg>

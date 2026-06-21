@@ -14,6 +14,35 @@ export interface YarnMetrics {
   isFeasible: boolean;
 }
 
+export interface Keyframe {
+  id: string;
+  timestamp: number;
+  params: YarnParams;
+  metrics: YarnMetrics;
+  isKeyChange?: boolean;
+}
+
+export interface PlaybackRecord {
+  id: string;
+  name: string;
+  keyframes: Keyframe[];
+  duration: number;
+  createdAt: number;
+}
+
+export interface PlaybackState {
+  isRecording: boolean;
+  isPlaying: boolean;
+  isPaused: boolean;
+  currentTime: number;
+  duration: number;
+  playbackSpeed: number;
+  keyframes: Keyframe[];
+  currentKeyframeIdx: number;
+  savedRecords: PlaybackRecord[];
+  loadedRecord: PlaybackRecord | null;
+}
+
 export interface Experiment {
   id: string;
   name: string;

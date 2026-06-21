@@ -79,19 +79,37 @@ export default function CompareChart() {
 
     return metricDefs.map((m) => {
       const item: Record<string, unknown> = { metric: m.label };
-      allEntries.forEach((entry) => {
+      allEntries.forEach((entry, entryIdx) => {
         let value = 0;
         if (m.key === 'twist') value = entry.捻度;
         else if (m.key === 'breakRisk') value = entry.断线风险;
         else if (m.key === 'uniformity') value = entry.均匀度;
-        else if (m.key === 'spindleSpeed') value = entry.isCurrent ? params.spindleSpeed : 0;
-        else if (m.key === 'draftSpeed') value = entry.isCurrent ? params.draftSpeed : 0;
+        else if (m.key === 'spindleSpeed') {
+          if (entry.isCurrent) {
+            value = params.spindleSpeed;
+          } else {
+            const originalIdx = entryIdx - 1;
+            if (selectedExperiments[originalIdx]) {
+              value = selectedExperiments[originalIdx].params.spindleSpeed;
+            }
+          }
+        }
+        else if (m.key === 'draftSpeed') {
+          if (entry.isCurrent) {
+            value = params.draftSpeed;
+          } else {
+            const originalIdx = entryIdx - 1;
+            if (selectedExperiments[originalIdx]) {
+              value = selectedExperiments[originalIdx].params.draftSpeed;
+            }
+          }
+        }
 
         item[entry.name] = Math.round((value / m.max) * 100);
       });
       return item;
     });
-  }, [allEntries, params]);
+  }, [allEntries, params, selectedExperiments]);
 
   const radarColors = useMemo(() => {
     return allEntries.map((entry) => {

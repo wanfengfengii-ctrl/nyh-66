@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useYarnStore } from '@/store/useStore';
 import { calculateYarnMetrics } from '@/utils/calculations';
-import { TWIST_LEVEL_COLORS } from '@/utils/constants';
+import { TWIST_LEVEL_COLORS, TWIST_LEVEL_LABELS } from '@/utils/constants';
 import { Plus, Trash2, CheckCircle, XCircle, FlaskConical } from 'lucide-react';
 
 export default function ExperimentList() {
@@ -28,8 +28,7 @@ export default function ExperimentList() {
     return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
   };
 
-  const twistLabel = (level: string) =>
-    level === 'low' ? '低捻' : level === 'optimal' ? '适中' : '过捻';
+  const twistLabel = (level: string) => TWIST_LEVEL_LABELS[level] || level;
 
   return (
     <div className="bg-slate-800/60 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl">
